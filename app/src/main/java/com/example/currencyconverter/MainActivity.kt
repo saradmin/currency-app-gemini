@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
 import coil.request.ImageRequest
 import java.util.Locale
 
@@ -328,7 +327,6 @@ fun FlagImage(countryCode: String, modifier: Modifier = Modifier) {
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(url)
-            .decoderFactory(SvgDecoder.Factory())
             .crossfade(true)
             .build(),
         contentDescription = "Флаг $countryCode",
