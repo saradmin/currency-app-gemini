@@ -343,4 +343,115 @@ jobs:
                             override fun afterTextChanged(s: Editable?) {}
                         })
                     }
-                    
+                    row.addView(rateEdit)
+                    listContainer.addView(row)
+                }
+
+                scrollView.addView(listContainer)
+                mainLayout.addView(scrollView)
+
+                if (currencies.size < 6) {
+                    val addBtn = Button(this).apply {
+                        text = "+ Добавить новую валюту"
+                        setOnClickListener { showAddDialog() }
+                    }
+                    mainLayout.addView(addBtn)
+                }
+
+                rootContainer.addView(mainLayout)
+            }
+
+            private fun setBaseCurrency(newIndex: Int) {
+                if (newIndex == baseIndex) return
+                val oldRate = currencies[newIndex].rateToBase
+                if (oldRate <= 0) return
+                for (i in currencies.indices) {
+                    currencies[i].rateToBase /= oldRate
+                }
+                currencies[newIndex].rateToBase = 1.0
+                baseIndex = newIndex
+            }
+
+            private fun showAddDialog() {
+                val builder = AlertDialog.Builder(this)
+                builder.setTitle("Добавить валюту")
+
+                val layout = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(32, 16, 32, 16)
+                }
+
+                val codeInput = EditText(this).apply { hint = "Код (напр. TRY)" }
+                val countryInput = EditText(this).apply { hint = "Страна ISO (напр. tr)" }
+                val rateInput = EditText(this).apply {
+                    hint = "Начальный курс к базе"
+                    inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    setText("1.0")
+                }
+
+                val previewRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                val previewFlag = ImageView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(80, 56)
+                }
+                val loadBtn = Button(this).apply {
+                    text = "🔎 Иконка"
+                    setOnClickListener {
+                        val cCode = countryInput.text.toString().trim().lowercase()
+                        if (cCode.isNotEmpty()) loadFlag(cCode, previewFlag)
+                    }
+                }
+                previewRow.addView(loadBtn)
+                previewRow.addView(previewFlag)
+
+                layout.addView(codeInput)
+                layout.addView(countryInput)
+                layout.addView(previewRow)
+                layout.addView(rateInput)
+
+                builder.setView(layout)
+                builder.setPositiveButton("Сохранить") { dialog, _ ->
+                    val code = codeInput.text.toString().trim().uppercase()
+                    val country = countryInput.text.toString().trim().lowercase()
+                    val rate = rateInput.text.toString().toDoubleOrNull() ?: 1.0
+                    if (code.isNotEmpty() && country.isNotEmpty() && currencies.size < 6) {
+                        currencies.add(CurrencyItem(code, country, rate))
+                        showManageScreen()
+                    }
+                    dialog.dismiss()
+                }
+                builder.setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
+                builder.show()
+            }
+
+            private fun loadFlag(countryCode: String, imageView: ImageView) {
+                executor.execute {
+                    try {
+                        val url = URL("https://flagcdn.com/w160/${countryCode.lowercase()}.png")
+                        val bitmap = BitmapFactory.decodeStream(url.openStream())
+                        mainHandler.post { imageView.setImageBitmap(bitmap) }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+        EOF
+
+    - name: Fix SDK Permissions & Accept Licenses
+      run: |
+        sudo chmod -R 777 $ANDROID_HOME
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+    - name: Build Debug APK
+      run: gradle assembleDebug --stacktrace
+      env:
+        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: CurrencyApp-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
