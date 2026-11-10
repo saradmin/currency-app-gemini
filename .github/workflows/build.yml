@@ -25,13 +25,12 @@ jobs:
 
     - name: Accept Android SDK Licenses
       run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
         mkdir -p "$ANDROID_HOME/licenses"
-        printf "89330d32231823721117877a322ef08f3560f99a\n24333702352690920997646f01e6142db90e7380\nd56f5187479451eabf01fb78af6dfcb131a6481e\n248824f79a62b165b642e4051b72ad6873d20510\n84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_HOME/licenses/android-sdk-license"
+        printf "89330d32231823721117877a322ef08f3560f99a\n24333702352690920997646f01e6142db90e7380\nd56f5187479451eabf01fb78af6dfcb131a6481e\n248824f79a62b165b642e4051b72ad6873d20510\n84831b9409646a918e30573bab4c9c91346d8abd\nc659690327f3b89b4f9103e67305988d44ee4947\n6010071571d87e07b22f42a033f20e4b85c184c8" > "$ANDROID_HOME/licenses/android-sdk-license"
 
     - name: Build Debug APK
       run: gradle assembleDebug
-      env:
-        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
