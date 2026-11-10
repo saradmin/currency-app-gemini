@@ -1,335 +1,326 @@
 package com.example.currencyconverter
 
+import android.app.AlertDialog
+import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
+import java.net.URL
 import java.util.Locale
+import java.util.concurrent.Executors
 
 data class CurrencyItem(
     val code: String,
     val countryCode: String,
-    val rateToBase: Double
+    var rateToBase: Double
 )
 
-class CurrencyViewModel : ViewModel() {
-    var amountInput by mutableStateOf("100.00")
-    
-    var currencies = mutableStateListOf(
+class MainActivity : AppCompatActivity() {
+
+    private val currencies = mutableListOf(
         CurrencyItem("USD", "us", 1.0),
         CurrencyItem("RUB", "ru", 92.50),
         CurrencyItem("EUR", "eu", 0.915),
         CurrencyItem("CNY", "cn", 7.183)
     )
+    private var baseIndex = 0
+    private var currentAmount = 100.0
 
-    var baseIndex by mutableStateOf(0)
-    var currentScreen by mutableStateOf(Screen.MAIN)
-    var showAddDialog by mutableStateOf(false)
+    private val executor = Executors.newCachedThreadPool()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
-    enum class Screen { MAIN, MANAGE }
+    private lateinit var rootContainer: FrameLayout
 
-    fun setBaseCurrency(newIndex: Int) {
-        if (newIndex == baseIndex || newIndex !in currencies.indices) return
-        val oldRateOfNewBase = currencies[newIndex].rateToBase
-        if (oldRateOfNewBase <= 0) return
-
-        for (i in currencies.indices) {
-            val updatedRate = currencies[i].rateToBase / oldRateOfNewBase
-            currencies[i] = currencies[i].copy(rateToBase = updatedRate)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        rootContainer = FrameLayout(this).apply {
+            setBackgroundColor(Color.WHITE)
         }
-        currencies[newIndex] = currencies[newIndex].copy(rateToBase = 1.0)
+        setContentView(rootContainer)
+        showMainScreen()
+    }
+
+    private fun showMainScreen() {
+        rootContainer.removeAllViews()
+
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 32, 32, 32)
+        }
+
+        val title = TextView(this).apply {
+            text = "Конвертер валют"
+            textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, 0, 0, 24)
+        }
+        mainLayout.addView(title)
+
+        val inputRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val amountInput = EditText(this).apply {
+            hint = "Сумма"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(String.format(Locale.US, "%.2f", currentAmount))
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        inputRow.addView(amountInput)
+
+        val baseCurrency = currencies[baseIndex]
+        val flagBtn = Button(this).apply {
+            text = "${baseCurrency.code} ▼"
+            setOnClickListener { showManageScreen() }
+        }
+        inputRow.addView(flagBtn)
+        mainLayout.addView(inputRow)
+
+        val scrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        val listContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 24, 0, 0)
+        }
+
+        fun updateCalculations() {
+            listContainer.removeAllViews()
+            for ((idx, item) in currencies.withIndex()) {
+                if (idx == baseIndex) continue
+                val converted = currentAmount * item.rateToBase
+
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, 16, 0, 16)
+                }
+
+                val flagImg = ImageView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(80, 56)
+                }
+                loadFlag(item.countryCode, flagImg)
+                row.addView(flagImg)
+
+                val codeTxt = TextView(this).apply {
+                    text = "  ${item.code}"
+                    textSize = 18f
+                    setTypeface(null, Typeface.BOLD)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                row.addView(codeTxt)
+
+                val valTxt = TextView(this).apply {
+                    text = String.format(Locale.US, "%.2f", converted)
+                    textSize = 20f
+                }
+                row.addView(valTxt)
+
+                listContainer.addView(row)
+            }
+        }
+
+        amountInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                currentAmount = s.toString().toDoubleOrNull() ?: 0.0
+                updateCalculations()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        updateCalculations()
+        scrollView.addView(listContainer)
+        mainLayout.addView(scrollView)
+        rootContainer.addView(mainLayout)
+    }
+
+    private fun showManageScreen() {
+        rootContainer.removeAllViews()
+
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 32, 32, 32)
+        }
+
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val backBtn = Button(this).apply {
+            text = "← Назад"
+            setOnClickListener { showMainScreen() }
+        }
+        val title = TextView(this).apply {
+            text = "  Курсы валют"
+            textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+        }
+        headerRow.addView(backBtn)
+        headerRow.addView(title)
+        mainLayout.addView(headerRow)
+
+        val scrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+        val listContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 24, 0, 0)
+        }
+
+        for ((idx, item) in currencies.withIndex()) {
+            val isBase = idx == baseIndex
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 12, 0, 12)
+            }
+
+            val radio = RadioButton(this).apply {
+                isChecked = isBase
+                setOnClickListener {
+                    setBaseCurrency(idx)
+                    showManageScreen()
+                }
+            }
+            row.addView(radio)
+
+            val flagImg = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(60, 42)
+            }
+            loadFlag(item.countryCode, flagImg)
+            row.addView(flagImg)
+
+            val codeTxt = TextView(this).apply {
+                text = " ${item.code} "
+                textSize = 16f
+                setTypeface(null, Typeface.BOLD)
+            }
+            row.addView(codeTxt)
+
+            val rateEdit = EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                setText(item.rateToBase.toString())
+                isEnabled = !isBase
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        val r = s.toString().toDoubleOrNull() ?: return
+                        currencies[idx].rateToBase = r
+                    }
+                    override fun afterTextChanged(s: Editable?) {}
+                })
+            }
+            row.addView(rateEdit)
+            listContainer.addView(row)
+        }
+
+        scrollView.addView(listContainer)
+        mainLayout.addView(scrollView)
+
+        if (currencies.size < 6) {
+            val addBtn = Button(this).apply {
+                text = "+ Добавить новую валюту"
+                setOnClickListener { showAddDialog() }
+            }
+            mainLayout.addView(addBtn)
+        }
+
+        rootContainer.addView(mainLayout)
+    }
+
+    private fun setBaseCurrency(newIndex: Int) {
+        if (newIndex == baseIndex) return
+        val oldRate = currencies[newIndex].rateToBase
+        if (oldRate <= 0) return
+        for (i in currencies.indices) {
+            currencies[i].rateToBase /= oldRate
+        }
+        currencies[newIndex].rateToBase = 1.0
         baseIndex = newIndex
     }
 
-    fun updateRate(index: Int, newRateStr: String) {
-        val rate = newRateStr.toDoubleOrNull() ?: return
-        currencies[index] = currencies[index].copy(rateToBase = rate)
-    }
+    private fun showAddDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Добавить валюту")
 
-    fun addCurrency(code: String, countryCode: String, rate: Double) {
-        if (currencies.size < 6) {
-            currencies.add(CurrencyItem(code.uppercase(), countryCode.lowercase(), rate))
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 16, 32, 16)
         }
-    }
-}
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    CurrencyConverterApp()
-                }
+        val codeInput = EditText(this).apply { hint = "Код (напр. TRY)" }
+        val countryInput = EditText(this).apply { hint = "Страна ISO (напр. tr)" }
+        val rateInput = EditText(this).apply {
+            hint = "Начальный курс к базе"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText("1.0")
+        }
+
+        val previewRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val previewFlag = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(80, 56)
+        }
+        val loadBtn = Button(this).apply {
+            text = "🔎 Иконка"
+            setOnClickListener {
+                val cCode = countryInput.text.toString().trim().lowercase()
+                if (cCode.isNotEmpty()) loadFlag(cCode, previewFlag)
             }
         }
-    }
-}
+        previewRow.addView(loadBtn)
+        previewRow.addView(previewFlag)
 
-@Composable
-fun CurrencyConverterApp(vm: CurrencyViewModel = viewModel()) {
-    when (vm.currentScreen) {
-        CurrencyViewModel.Screen.MAIN -> MainScreen(vm)
-        CurrencyViewModel.Screen.MANAGE -> ManageScreen(vm)
-    }
+        layout.addView(codeInput)
+        layout.addView(countryInput)
+        layout.addView(previewRow)
+        layout.addView(rateInput)
 
-    if (vm.showAddDialog) {
-        AddCurrencyDialog(
-            onDismiss = { vm.showAddDialog = false },
-            onAdd = { code, countryCode, rate ->
-                vm.addCurrency(code, countryCode, rate)
-                vm.showAddDialog = false
+        builder.setView(layout)
+        builder.setPositiveButton("Сохранить") { dialog, _ ->
+            val code = codeInput.text.toString().trim().uppercase()
+            val country = countryInput.text.toString().trim().lowercase()
+            val rate = rateInput.text.toString().toDoubleOrNull() ?: 1.0
+            if (code.isNotEmpty() && country.isNotEmpty() && currencies.size < 6) {
+                currencies.add(CurrencyItem(code, country, rate))
+                showManageScreen()
             }
-        )
+            dialog.dismiss()
+        }
+        builder.setNegativeButton("Отмена") { dialog, _ -> dialog.dismiss() }
+        builder.show()
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainScreen(vm: CurrencyViewModel) {
-    val baseCurrency = vm.currencies.getOrNull(vm.baseIndex) ?: return
-    val baseAmount = vm.amountInput.toDoubleOrNull() ?: 0.0
-
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("Конвертер валют") }) }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize()
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = vm.amountInput,
-                    onValueChange = { vm.amountInput = it },
-                    label = { Text("Сумма") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                OutlinedButton(
-                    onClick = { vm.currentScreen = CurrencyViewModel.Screen.MANAGE },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    FlagImage(countryCode = baseCurrency.countryCode, modifier = Modifier.size(28.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(baseCurrency.code)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("▼")
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider()
-
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                itemsIndexed(vm.currencies) { index, item ->
-                    if (index != vm.baseIndex) {
-                        val convertedValue = baseAmount * item.rateToBase
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                FlagImage(countryCode = item.countryCode, modifier = Modifier.size(28.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(item.code, style = MaterialTheme.typography.titleMedium)
-                            }
-                            Text(
-                                text = String.format(Locale.US, "%.2f", convertedValue),
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                        }
-                        HorizontalDivider()
-                    }
-                }
+    private fun loadFlag(countryCode: String, imageView: ImageView) {
+        executor.execute {
+            try {
+                val url = URL("https://flagcdn.com/w160/${countryCode.lowercase()}.png")
+                val bitmap = BitmapFactory.decodeStream(url.openStream())
+                mainHandler.post { imageView.setImageBitmap(bitmap) }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ManageScreen(vm: CurrencyViewModel) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Выбор базы и курсы") },
-                navigationIcon = {
-                    IconButton(onClick = { vm.currentScreen = CurrencyViewModel.Screen.MAIN }) {
-                        Text("←", style = MaterialTheme.typography.titleLarge)
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .fillMaxSize()
-        ) {
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                itemsIndexed(vm.currencies) { index, item ->
-                    val isBase = index == vm.baseIndex
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = isBase,
-                            onClick = { vm.setBaseCurrency(index) }
-                        )
-
-                        FlagImage(countryCode = item.countryCode, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(item.code, modifier = Modifier.width(48.dp))
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        var rateText by remember(item.rateToBase) { mutableStateOf(item.rateToBase.toString()) }
-
-                        OutlinedTextField(
-                            value = rateText,
-                            onValueChange = {
-                                rateText = it
-                                vm.updateRate(index, it)
-                            },
-                            enabled = !isBase,
-                            label = { Text(if (isBase) "Базовая (1.0)" else "Курс к базе") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    HorizontalDivider()
-                }
-            }
-
-            if (vm.currencies.size < 6) {
-                Button(
-                    onClick = { vm.showAddDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("+ Добавить новую валюту")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AddCurrencyDialog(
-    onDismiss: () -> Unit,
-    onAdd: (code: String, countryCode: String, rate: Double) -> Unit
-) {
-    var currencyCode by remember { mutableStateOf("") }
-    var countryCode by remember { mutableStateOf("") }
-    var rateInput by remember { mutableStateOf("1.0") }
-    var previewCountryCode by remember { mutableStateOf<String?>(null) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Добавить валюту") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = currencyCode,
-                    onValueChange = { currencyCode = it },
-                    label = { Text("Код валюты (напр. TRY)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                OutlinedTextField(
-                    value = countryCode,
-                    onValueChange = { countryCode = it },
-                    label = { Text("Код страны ISO (напр. tr)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Button(
-                    onClick = { previewCountryCode = countryCode.trim().lowercase() },
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text("🔎 Загрузить иконку")
-                }
-
-                previewCountryCode?.let { code ->
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Предпросмотр: ")
-                        FlagImage(countryCode = code, modifier = Modifier.size(32.dp))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = rateInput,
-                    onValueChange = { rateInput = it },
-                    label = { Text("Начальный курс к базе") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val rate = rateInput.toDoubleOrNull() ?: 1.0
-                    if (currencyCode.isNotBlank() && countryCode.isNotBlank()) {
-                        onAdd(currencyCode, countryCode, rate)
-                    }
-                }
-            ) {
-                Text("Сохранить")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Отмена")
-            }
-        }
-    )
-}
-
-@Composable
-fun FlagImage(countryCode: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val url = "https://flagcdn.com/w160/${countryCode.lowercase()}.png"
-
-    AsyncImage(
-        model = ImageRequest.Builder(context)
-            .data(url)
-            .crossfade(true)
-            .build(),
-        contentDescription = "Флаг $countryCode",
-        modifier = modifier
-    )
 }
