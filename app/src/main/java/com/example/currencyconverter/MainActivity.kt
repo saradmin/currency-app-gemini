@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import java.util.Locale
 
 data class CurrencyItem(
     val code: String,
@@ -136,7 +135,8 @@ fun MainScreen(vm: CurrencyViewModel) {
                     FlagImage(countryCode = baseCurrency.countryCode, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(baseCurrency.code)
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбор")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("▼")
                 }
             }
 
@@ -160,7 +160,7 @@ fun MainScreen(vm: CurrencyViewModel) {
                                 Text(item.code, style = MaterialTheme.typography.titleMedium)
                             }
                             Text(
-                                text = String.format("%.2f", convertedValue),
+                                text = String.format(Locale.US, "%.2f", convertedValue),
                                 style = MaterialTheme.typography.titleLarge
                             )
                         }
