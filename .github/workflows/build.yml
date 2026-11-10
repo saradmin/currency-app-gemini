@@ -18,12 +18,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Generate Gradle Wrapper
-      run: gradle wrapper
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: gradle assembleDebug --stacktrace
       env:
+        ANDROID_HOME: /usr/local/lib/android/sdk
         GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx2048m"
 
     - name: Upload APK Artifact
